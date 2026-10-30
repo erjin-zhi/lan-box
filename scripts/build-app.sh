@@ -7,6 +7,8 @@ cd "$(dirname "$0")/.."
 CONFIG="${1:-release}"
 APP="build/LanBox.app"
 VERSION="1.0.0"
+# 每次构建递增，系统据此刷新缓存的 App 图标（Dock、通知、Finder）
+BUILD="$(date +%Y%m%d%H%M)"
 
 swift build -c "$CONFIG"
 BIN="$(swift build -c "$CONFIG" --show-bin-path)/LanBox"
@@ -32,7 +34,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundleExecutable</key><string>LanBox</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>${VERSION}</string>
-  <key>CFBundleVersion</key><string>1</string>
+  <key>CFBundleVersion</key><string>${BUILD}</string>
   <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>CFBundleDevelopmentRegion</key><string>zh_CN</string>
   <key>LSMinimumSystemVersion</key><string>26.0</string>
@@ -56,4 +58,8 @@ PLIST
 
 xattr -cr "$APP"
 codesign --force --deep --sign - "$APP" >/dev/null
+
+# 重新登记到 LaunchServices，通知中心和 Dock 才会换成新图标
+touch "$APP"
+/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$APP" >/dev/null 2>&1 || true
 echo "已生成 $APP"
