@@ -1,17 +1,25 @@
 #!/bin/zsh
 # 构建 LanBox.app，输出到 build/LanBox.app
-# 用法：./scripts/build-app.sh [release|debug]
+# 用法：./scripts/build-app.sh [release|debug] [native|universal|arm64|x86_64]
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 CONFIG="${1:-release}"
+TARGET_ARCH="${2:-native}"
+BUILD_ARGS=(-c "$CONFIG")
+case "$TARGET_ARCH" in
+  native) ;;
+  universal) BUILD_ARGS+=(--arch arm64 --arch x86_64) ;;
+  arm64|x86_64) BUILD_ARGS+=(--arch "$TARGET_ARCH") ;;
+  *) echo "不支持的架构：$TARGET_ARCH" >&2; exit 1 ;;
+esac
 APP="build/LanBox.app"
 VERSION="1.0.0"
 # 每次构建递增，系统据此刷新缓存的 App 图标（Dock、通知、Finder）
 BUILD="$(date +%Y%m%d%H%M)"
 
-swift build -c "$CONFIG"
-BIN="$(swift build -c "$CONFIG" --show-bin-path)/LanBox"
+swift build "${BUILD_ARGS[@]}"
+BIN="$(swift build "${BUILD_ARGS[@]}" --show-bin-path)/LanBox"
 
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources/web"
@@ -62,4 +70,7 @@ codesign --force --deep --sign - "$APP" >/dev/null
 # 重新登记到 LaunchServices，通知中心和 Dock 才会换成新图标
 touch "$APP"
 /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$APP" >/dev/null 2>&1 || true
+# LaunchServices 可能重新附加 FinderInfo；分发前清理，确保严格签名验证通过。
+xattr -cr "$APP"
+codesign --verify --deep --strict "$APP"
 echo "已生成 $APP"

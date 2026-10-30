@@ -1,91 +1,78 @@
-# LanBox
+<p align="center">
+  <img src="Resources/web/logo.svg" width="100" height="100" alt="LanBox icon">
+</p>
 
-macOS 菜单栏上的局域网文件共享工具。启动后自动创建一个临时共享文件夹，把文件拖进去，同一网络里的手机、平板、电脑用浏览器打开地址或扫码即可下载；对方也能把文件上传回 Mac。
+<h1 align="center">LanBox</h1>
 
-- 原生 Swift（AppKit + SwiftUI），面向 macOS 26 及以上，界面采用 Liquid Glass 风格
-- 无第三方依赖，内置基于 Network.framework 的 HTTP 服务器
-- 访客端是浏览器网页，无需安装任何东西
+<p align="center"><strong>把文件放进来，同一网络的设备就能拿走。</strong></p>
 
-## 构建与运行
+<p align="center">
+  轻巧的 macOS 局域网文件共享工具。<br>
+  Mac 上拖入文件，手机、平板和电脑打开浏览器即可收发，无需账号或云端中转。
+</p>
 
-```bash
-./scripts/build-app.sh          # 生成 build/LanBox.app（Release）
-open build/LanBox.app
-```
+<p align="center">
+  <a href="https://github.com/erjin-zhi/lan-box/releases/latest"><img src="https://img.shields.io/badge/下载-最新版本-007AFF?style=flat-square" alt="下载最新版本"></a>
+  <img src="https://img.shields.io/badge/macOS-26%2B-555555?style=flat-square&logo=apple&logoColor=white" alt="macOS 26 或更高版本">
+  <img src="https://img.shields.io/badge/Apple_Silicon_%26_Intel-Universal-555555?style=flat-square" alt="Apple Silicon 与 Intel 通用版">
+</p>
 
-想长期使用可以把 `build/LanBox.app` 拖进“应用程序”文件夹。首次运行时系统可能询问是否允许接收传入连接、发送通知，请选择允许。
+<p align="center">
+  <a href="#功能">功能</a> ·
+  <a href="#界面预览">界面预览</a> ·
+  <a href="#下载与使用">下载与使用</a> ·
+  <a href="https://github.com/erjin-zhi/lan-box/issues">反馈问题</a>
+</p>
 
-## 使用
+<p align="center">
+  <img src="docs/images/mac-main.png" width="980" alt="LanBox Mac 主窗口：左侧为共享地址、二维码和在线设备，右侧为共享文件列表">
+</p>
 
-| 操作 | 说明 |
+## 功能
+
+| | 能做什么 |
 | --- | --- |
-| 共享文件 | 把文件或文件夹拖到菜单栏图标，或拖进面板；也可以点“选择…” |
-| 访问 | 面板里有地址和二维码，点二维码可放大成独立窗口，方便多台手机扫码 |
-| 访问码 | 默认开启。扫码或用“拷贝链接”打开时自动带上访问码，手动输入地址时需要填 6 位数字 |
-| 上传 | 访客点“上传到 Mac”，或在电脑浏览器里直接把文件 / 文件夹拖进网页 |
-| 共享文件夹 | 默认是本次启动新建的临时文件夹；底部可切换为任意文件夹 |
-| 设备 | 实时显示谁在线、在下载 / 上传什么；右键可阻止某台设备 |
-| 传输 | 每个传输的进度、速度、剩余时间，可随时停止 |
+| **拖入即共享** | 把文件或文件夹拖到主窗口、菜单栏或 Dock 图标，也可以点击选择文件。默认以替身共享，无需先复制一份。 |
+| **扫码就能连接** | 手机扫码，或在另一台电脑上打开共享链接。默认启用 6 位访问码，二维码和拷贝链接已包含访问码。 |
+| **双向传文件** | 访客可以下载 Mac 上的文件，也能把文件上传回来。电脑浏览器还支持拖入整个文件夹。 |
+| **粘贴也能分享** | 在 Mac 窗口或电脑网页中粘贴文件、截图或文字；文字自动保存为 TXT。 |
+| **先看再下载** | 网页支持图片预览，以及浏览器可播放的音视频、PDF 和纯文本。文件夹和 App 文件包自动打包成 ZIP 下载。 |
+| **传输看得见** | 查看在线设备、正在访问的内容，以及传输进度、速度和剩余时间；可停止传输、阻止设备访问或关闭上传。 |
+| **随手开，随手收** | 菜单栏面板与独立主窗口都能使用，支持登录时启动、新设备和收到文件通知，也可选择固定的共享文件夹。 |
 
-### 替身（符号链接）
+## 界面预览
 
-拖入的项目默认以符号链接加入共享文件夹，不会复制原文件。从共享中移除只删除链接，原文件不受影响。设置里可以改为“拷贝一份”。
+<p align="center">
+  <img src="docs/images/browser-mobile.png" width="320" alt="手机浏览器中的 LanBox，可查看连接设备、下载文件并上传到 Mac">
+</p>
 
-- 原文件被移动或删除后，Mac 端会标红提示，网页上自动隐藏
-- 文件夹、App 等文件包下载时即时打包为 zip（流式，不占临时空间）
-- 访客上传的文件只会写入共享文件夹本身及其真实子文件夹，不会穿过替身写进你的原始文件夹
+<p align="center">手机扫码打开网页，即可查看共享文件、下载或上传。</p>
 
-### 临时文件夹
+<details>
+  <summary>查看电脑浏览器界面</summary>
+  <br>
+  <img src="docs/images/browser-desktop.png" width="980" alt="电脑浏览器中的 LanBox 文件列表和设备连接状态">
+</details>
 
-位于系统临时目录 `…/T/LanBox/`。下次启动时，只含替身的旧临时文件夹会被清理；含有收到文件的不会删除。退出时如果临时文件夹里有收到的文件，会询问是否移到“下载”。
+截图来自实际运行界面，使用演示文件；手机视图由浏览器模拟移动设备尺寸。
 
-## 安全
+## 下载与使用
 
-- 只在局域网内提供服务，没有任何外网通信
-- 访问码保存在 HttpOnly Cookie 中；同一 IP 连续输错 5 次锁定 1 分钟
-- 更换访问码会让所有已连接设备重新验证
-- 路径一律相对于共享文件夹解析，拒绝 `..` 和隐藏文件
-- 网页内预览只对图片、音视频、PDF、纯文本开放，HTML / SVG 等一律作为附件下载
+1. 前往 **[Releases 下载最新版](https://github.com/erjin-zhi/lan-box/releases/latest)**，解压 `LanBox-1.0.0-macOS-universal.zip`，将 `LanBox.app` 拖入「应用程序」。需要 **macOS 26 或更高版本**，安装包同时支持 Apple Silicon 和 Intel。
+2. 打开 LanBox，允许系统提示的局域网访问与传入连接，把需要共享的文件拖进窗口。
+3. 让另一台设备连接同一网络，扫描二维码或打开拷贝的链接。点击文件可预览或下载，点击「上传到 Mac」可把文件传回来。
 
-## 项目结构
+> [!NOTE]
+> 当前版本尚未经过 Apple 公证。如果 macOS 拦截首次打开，请确认下载来源后，前往「系统设置 → 隐私与安全性」选择「仍要打开」。
 
-```
-Sources/LanBox/
-  main.swift, AppDelegate.swift   菜单栏图标、弹出面板、拖放、二维码窗口、退出处理
-  Model/AppModel.swift            应用状态、设置、共享文件夹管理、通知
-  Model/ShareStore.swift          共享文件夹的读写、路径校验、替身
-  Server/HTTPServer.swift         NWListener，端口被占用时自动顺延
-  Server/HTTPConnection.swift     单个连接：解析请求头、流式读写
-  Server/APIHandler.swift         路由：网页、列表、下载（Range / zip）、上传、缩略图、SSE
-  Server/ServerHub.swift          设备、传输、实时事件推送
-  Views/                          SwiftUI 界面
-Resources/web/index.html          访客网页（单文件，无依赖）
-scripts/build-app.sh              打包 .app 并 ad-hoc 签名
-scripts/make-icon.swift           生成 App 图标
-```
+### 文件放在哪里？
 
-## 接口
+- **从 Mac 拖入的文件**：默认只创建替身，不复制原文件；移除替身不会删除原文件。也可在设置中切换为「拷贝一份」。原文件移动或删除后，需要重新加入共享。
+- **其他设备上传的文件**：保存在当前共享文件夹。上传不会通过替身写入原始文件夹。
+- **临时收到的文件**：默认使用临时共享文件夹，退出时会提醒移到「下载」。重要文件请及时保存，也可在面板底部选择一个固定文件夹。
 
-| 方法 | 路径 | 说明 |
-| --- | --- | --- |
-| GET | `/` | 访客网页；`?k=访问码` 会写入 Cookie |
-| POST | `/api/auth` | `{"pin": "123456"}` |
-| GET | `/api/info` | 主机与本设备信息 |
-| POST | `/api/hello` | 上报设备类型 / 名称 |
-| GET | `/api/list?path=` | 列出文件夹 |
-| GET | `/api/download?path=[&inline=1]` | 下载，支持 Range；文件夹自动打包 zip |
-| GET | `/api/thumb?path=` | QuickLook 缩略图 |
-| PUT | `/api/upload?dir=&name=` | 请求体即文件内容，`name` 可含子目录 |
-| GET | `/api/events` | SSE：`files` `devices` `host` `transfer` `reset` `shutdown` |
+### 连接与访问
 
-命令行也能用：
+LanBox 面向同一局域网使用，文件直接在设备间传输。当前连接使用 HTTP，适合可信的家庭或办公网络。共享链接和二维码包含访问码，请只发给需要访问的人；更换访问码后，已连接设备需要重新验证。
 
-```bash
-curl -c jar "http://<地址>/?k=<访问码>" -o /dev/null
-curl -b jar -T 文件.zip "http://<地址>/api/upload?dir=&name=文件.zip"
-```
-
-## 开发
-
-改网页时用 `swift run`：开发模式下直接读取 `Resources/web/index.html`，刷新浏览器即可看到修改。
-注意 `swift run` 启动的不是 .app，系统通知不可用；完整体验请用打包后的 App。
+如果另一台设备打不开网页，请检查双方是否在同一网络、Mac 是否仍在共享，以及防火墙是否允许 LanBox 接收连接。访客 Wi-Fi 或开启设备隔离的网络可能无法互相访问。
