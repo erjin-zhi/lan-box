@@ -82,6 +82,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
             window.title = "LanBox"
             window.titleVisibility = .hidden
             window.titlebarAppearsTransparent = true
+            // 标题栏被内容覆盖，允许拖动空白处移动窗口
+            window.isMovableByWindowBackground = true
             window.isReleasedWhenClosed = false
             window.contentViewController = NSHostingController(rootView: MainWindowView(
                 model: model,

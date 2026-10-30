@@ -11,13 +11,19 @@ struct MainWindowView: View {
     @State private var dropTargeted = false
 
     var body: some View {
-        NavigationSplitView {
+        // 固定两栏，不用系统可折叠侧栏：折叠时工具栏区域出现 / 消失会让整页上下跳动。
+        // 窗口内容延伸到标题栏下面，顶部留出固定高度给红绿灯按钮，布局不随安全区变化。
+        HStack(spacing: 0) {
             sidebar
-                .navigationSplitViewColumnWidth(min: 390, ideal: 400, max: 440)
-        } detail: {
+                .frame(width: MainWindowView.sidebarWidth)
+                .frame(maxHeight: .infinity, alignment: .top)
+                .background(SidebarBackground())
+            Divider()
             detail
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                .background(Color(nsColor: .textBackgroundColor))
         }
-        .toolbar(removing: .sidebarToggle)
+        .ignoresSafeArea()
         .frame(minWidth: 900, minHeight: 620)
         .onDrop(of: [.fileURL], isTargeted: $dropTargeted) { providers in
             loadFileURLs(providers) { urls in
@@ -28,6 +34,10 @@ struct MainWindowView: View {
         }
         .overlay(alignment: .bottom) { NoticeBanner(text: model.notice).padding(.bottom, 22) }
     }
+
+    static let sidebarWidth: CGFloat = 400
+    /// 标题栏（红绿灯）占用的高度。
+    static let titlebarHeight: CGFloat = 40
 
     // MARK: 左栏
 
@@ -90,7 +100,7 @@ struct MainWindowView: View {
             }
         }
         .padding(.horizontal, 18)
-        .padding(.top, 8)
+        .padding(.top, MainWindowView.titlebarHeight + 4)
         .padding(.bottom, 16)
     }
 
@@ -117,9 +127,23 @@ struct MainWindowView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         }
         .padding(.horizontal, 22)
-        .padding(.top, 10)
+        // 分段控件放在标题栏这一行，和红绿灯按钮垂直居中
+        .padding(.top, 8)
         .padding(.bottom, 18)
     }
+}
+
+/// 侧栏材质，与系统侧栏一致，并随窗口在前台 / 后台变化。
+private struct SidebarBackground: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSVisualEffectView {
+        let v = NSVisualEffectView()
+        v.material = .sidebar
+        v.blendingMode = .behindWindow
+        v.state = .followsWindowActiveState
+        return v
+    }
+
+    func updateNSView(_ nsView: NSVisualEffectView, context: Context) {}
 }
 
 func loadFileURLs(_ providers: [NSItemProvider], _ done: @escaping ([URL]) -> Void) {
