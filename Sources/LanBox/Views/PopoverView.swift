@@ -63,6 +63,7 @@ struct PopoverView: View {
                 .padding(10)
                 .card(radius: 12)
             }
+            NotificationsOffHint(model: model)
             AddressCard(model: model, showQR: showQR)
             tabPicker
             Group {

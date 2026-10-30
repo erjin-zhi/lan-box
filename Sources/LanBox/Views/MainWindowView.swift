@@ -61,6 +61,7 @@ struct MainWindowView: View {
                 .card(radius: 12)
             }
 
+            NotificationsOffHint(model: model)
             AddressCard(model: model, showQR: showQR)
                 .fixedSize(horizontal: false, vertical: true)
 

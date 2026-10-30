@@ -61,6 +61,10 @@ final class AppModel: ObservableObject {
             AppModel.applyDockPolicy(showInDock)
         }
     }
+    /// 系统设置里关闭了 LanBox 的通知（或从未授权）。
+    @Published private(set) var notificationsBlocked = false
+    /// 离开 App 期间收到的文件数，显示在 Dock 图标上，回到 App 时清零。
+    private var unseenReceived = 0
     /// 短暂的操作提示，例如“已加入 3 个项目”。
     @Published private(set) var notice: String?
     private var noticeTask: Task<Void, Never>?
@@ -517,7 +521,41 @@ final class AppModel: ObservableObject {
 
     func requestNotificationPermission() {
         guard AppModel.canNotify else { return }
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { [weak self] _, _ in
+            Task { @MainActor in self?.refreshNotificationStatus() }
+        }
+    }
+
+    /// 回到 App 时重新检查：用户可能刚在系统设置里打开了通知。
+    func refreshNotificationStatus() {
+        guard AppModel.canNotify else { return }
+        UNUserNotificationCenter.current().getNotificationSettings { [weak self] settings in
+            let blocked = settings.authorizationStatus == .denied || settings.authorizationStatus == .notDetermined
+                || settings.alertSetting == .disabled
+            Task { @MainActor in self?.notificationsBlocked = blocked }
+        }
+    }
+
+    func openNotificationSettings() {
+        let id = Bundle.main.bundleIdentifier ?? "app.lanbox.mac"
+        if let url = URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension?id=\(id)") {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
+    /// App 被切到前台：清掉 Dock 上的未读数，并刷新通知状态。
+    func appDidBecomeActive() {
+        unseenReceived = 0
+        NSApp.dockTile.badgeLabel = nil
+        refreshNotificationStatus()
+    }
+
+    /// 收到的文件在列表里保留“新”标记的时长。
+    static let newItemWindow: TimeInterval = 10 * 60
+
+    func isRecentlyReceived(_ item: SharedItem) -> Bool {
+        guard item.from != nil, let added = item.added else { return false }
+        return Date().timeIntervalSince(added) < AppModel.newItemWindow
     }
 
     private func notifyNewClient(_ client: ClientInfo) {
@@ -528,6 +566,13 @@ final class AppModel: ObservableObject {
 
     private func uploadFinished(_ t: Transfer) {
         reloadItems()
+        // 不依赖系统通知的提醒：App 内提示、Dock 角标、Dock 图标跳一下
+        flash("收到“\(t.name)”，来自 \(t.clientName)")
+        if !NSApp.isActive {
+            unseenReceived += 1
+            NSApp.dockTile.badgeLabel = "\(unseenReceived)"
+            if showInDock { NSApp.requestUserAttention(.informationalRequest) }
+        }
         guard notifyUploads else { return }
         pendingUploads.append(t)
         uploadNoticeTask?.cancel()
@@ -550,6 +595,8 @@ final class AppModel: ObservableObject {
         content.title = title
         content.body = body
         let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
-        UNUserNotificationCenter.current().add(request)
+        UNUserNotificationCenter.current().add(request) { [weak self] error in
+            if error != nil { Task { @MainActor in self?.refreshNotificationStatus() } }
+        }
     }
 }

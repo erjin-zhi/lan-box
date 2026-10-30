@@ -125,3 +125,26 @@ struct NoticeBanner: View {
         .allowsHitTesting(false)
     }
 }
+
+/// 系统通知被关闭时的提示：收到文件仍会有 Dock 角标和 App 内提示，但不会弹出横幅。
+struct NotificationsOffHint: View {
+    @ObservedObject var model: AppModel
+
+    var body: some View {
+        if model.notificationsBlocked && (model.notifyUploads || model.notifyNewDevices) {
+            HStack(spacing: 10) {
+                Image(systemName: "bell.slash.fill").foregroundStyle(.orange)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("系统通知已关闭").font(.caption.weight(.semibold))
+                    Text("收到文件时不会弹出提醒").font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 4)
+                Button("打开设置", action: model.openNotificationSettings)
+                    .buttonStyle(.glass)
+                    .controlSize(.small)
+            }
+            .padding(10)
+            .card(radius: 12)
+        }
+    }
+}

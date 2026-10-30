@@ -77,12 +77,27 @@ struct FileRow: View {
                     }
                 }
             VStack(alignment: .leading, spacing: 1) {
-                Text(item.name).font(.callout).lineLimit(1).truncationMode(.middle)
+                HStack(spacing: 6) {
+                    if model.isRecentlyReceived(item) {
+                        Circle().fill(Color.accentColor).frame(width: 7, height: 7)
+                            .help("最近收到的文件")
+                    }
+                    Text(item.name).font(.callout).lineLimit(1).truncationMode(.middle)
+                    Spacer(minLength: 6)
+                    if let added = item.added {
+                        Text(Fmt.relative(added))
+                            .font(.caption)
+                            .monospacedDigit()
+                            .foregroundStyle(model.isRecentlyReceived(item) ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(.tertiary))
+                            .help(Fmt.fullDate(added))
+                    }
+                }
                 Text(subtitle)
                     .font(.caption)
                     .foregroundStyle(item.isBroken ? AnyShapeStyle(.red) : AnyShapeStyle(.secondary))
                     .lineLimit(1)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         } actions: {
             if !item.isBroken {
                 RowIconButton(symbol: "magnifyingglass", help: "在 Finder 中显示") { model.reveal(item) }

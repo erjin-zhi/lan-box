@@ -18,6 +18,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
         model = AppModel()
         AppModel.applyDockPolicy(model.showInDock)
         NSApp.mainMenu = makeMainMenu()
+        NotificationCenter.default.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.model.appDidBecomeActive() }
+        }
         if AppModel.canNotify { UNUserNotificationCenter.current().delegate = self }
         model.requestNotificationPermission()
 
@@ -53,7 +56,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
             .store(in: &cancellables)
 
         if let dir = ProcessInfo.processInfo.environment["LANBOX_SNAPSHOT_DIR"] {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 4) { [weak self] in self?.writeSnapshots(to: URL(fileURLWithPath: dir)) }
+            let delay = Double(ProcessInfo.processInfo.environment["LANBOX_SNAPSHOT_DELAY"] ?? "") ?? 4
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in self?.writeSnapshots(to: URL(fileURLWithPath: dir)) }
         }
 
         // 显示 Dock 图标时，启动即打开主窗口；只在菜单栏时，首次启动展开面板
@@ -302,6 +306,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
                                   styleMask: [.borderless], backing: .buffered, defer: false)
             window.contentView = hosting
             window.backgroundColor = .windowBackgroundColor
+            // 离屏渲染画不出深色模式的材质背景，截图统一用浅色
+            window.appearance = NSAppearance(named: .aqua)
             window.orderFrontRegardless()
             hosting.layoutSubtreeIfNeeded()
             let burst = ProcessInfo.processInfo.environment["LANBOX_SNAPSHOT_BURST"] != nil

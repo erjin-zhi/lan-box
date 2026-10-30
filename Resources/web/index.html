@@ -1099,7 +1099,9 @@ button.onode { cursor: pointer; }
     if (entry.kind === 'file') meta.push('<span class="num">' + bytes(entry.size) + '</span>');
     else if (entry.kind === 'package') meta.push('<span>应用，打包为 zip 下载</span>');
     else meta.push('<span>文件夹</span>');
-    if (entry.modified && entry.kind === 'file') meta.push('<span class="date">' + when(entry.modified) + '</span>');
+    // 按“最新加入”排序时显示加入时间，其他排序显示修改时间
+    var stamp = S.sort === 'added' ? entry.added : (entry.kind === 'file' ? entry.modified : null);
+    if (stamp) meta.push('<span class="date">' + when(stamp) + '</span>');
     if (entry.from) meta.push('<span class="from">来自 ' + esc(entry.from) + '</span>');
     info.innerHTML = '<div class="name">' + esc(entry.name) + '</div><div class="meta">' + meta.join('') + '</div>';
 

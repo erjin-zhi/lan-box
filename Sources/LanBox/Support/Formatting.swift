@@ -22,6 +22,12 @@ enum Fmt {
         return f.string(from: date)
     }
 
+    static func fullDate(_ date: Date) -> String {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy年M月d日 HH:mm:ss"
+        return "加入时间：" + f.string(from: date)
+    }
+
     static func remaining(done: Int64, total: Int64, speed: Double) -> String? {
         guard speed > 1, total > done else { return nil }
         let s = Double(total - done) / speed
