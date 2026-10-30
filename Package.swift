@@ -16,7 +16,12 @@ let package = Package(
                 .linkedFramework("ServiceManagement"),
                 .linkedFramework("UserNotifications"),
             ]
-        )
+        ),
+        .testTarget(
+            name: "LanBoxTests",
+            dependencies: ["LanBox"],
+            path: "Tests/LanBoxTests"
+        ),
     ],
     swiftLanguageModes: [.v5]
 )

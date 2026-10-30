@@ -11,7 +11,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
     private var qrPanel: NSPanel?
     private var mainWindow: NSWindow?
     private var cancellables: Set<AnyCancellable> = []
-    private var springLoadTask: Task<Void, Never>?
+    private var menuBarDrop: MenuBarDropController?
+    private var dropBoxIsVisible = false
     private var pinned = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -49,6 +50,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
         let hosting = NSHostingController(rootView: root)
         hosting.sizingOptions = [.preferredContentSize]
         popover.contentViewController = hosting
+
+        if let button = statusItem.button {
+            menuBarDrop = MenuBarDropController(
+                button: button,
+                preferCopy: { [weak self] in self?.model.addMode == .copy },
+                onVisibilityChange: { [weak self] visible in
+                    guard let self else { return }
+                    self.dropBoxIsVisible = visible
+                    self.model.isDropTargeted = visible
+                    if visible { self.popover.performClose(nil) }
+                    self.updateStatusIcon()
+                },
+                onDrop: { [weak self] urls in self?.model.add(urls) },
+                onComplete: { [weak self] in self?.showPopover() }
+            )
+            menuBarDrop?.start()
+        }
 
         model.objectWillChange
             .receive(on: RunLoop.main)
@@ -190,7 +208,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
 
     private func updateStatusIcon(popoverIsOpen: Bool? = nil) {
         guard let button = statusItem?.button else { return }
-        let image = BoxStatusIcon.image(isOpen: popoverIsOpen ?? popover.isShown)
+        let image = BoxStatusIcon.image(isOpen: dropBoxIsVisible || (popoverIsOpen ?? popover.isShown))
         if button.image !== image { button.image = image }
         button.appearsDisabled = !model.isRunning
         let online = model.onlineClients.count
@@ -237,30 +255,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
     // MARK: 拖放到菜单栏图标（NSWindow 会把拖放消息转给 delegate）
 
     func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
-        model.isDropTargeted = true
-        springLoadTask?.cancel()
-        springLoadTask = Task { [weak self] in
-            try? await Task.sleep(for: .milliseconds(700))
-            if !Task.isCancelled { self?.showPopover() }
-        }
-        return .link
+        menuBarDrop?.draggingEntered(sender) ?? []
     }
 
-    func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation { .link }
+    func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation {
+        menuBarDrop?.draggingEntered(sender) ?? []
+    }
 
     func draggingExited(_ sender: NSDraggingInfo?) {
-        model.isDropTargeted = false
-        springLoadTask?.cancel()
+        menuBarDrop?.draggingExited()
+    }
+
+    func draggingEnded(_ sender: NSDraggingInfo) {
+        menuBarDrop?.draggingEnded()
     }
 
     func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
-        springLoadTask?.cancel()
-        model.isDropTargeted = false
-        let urls = sender.draggingPasteboard.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL] ?? []
-        guard !urls.isEmpty else { return false }
-        model.add(urls)
-        showPopover()
-        return true
+        menuBarDrop?.performDragOperation(sender) ?? false
     }
 
     // MARK: 大二维码面板
@@ -298,6 +309,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
         }
         views.append(("qr", AnyView(QRPanelView(model: model))))
         views.append(("main", AnyView(MainWindowView(model: model, showQR: {}, quit: {}).frame(width: 980, height: 660))))
+        let dropPreview = MenuBarDropState()
+        dropPreview.isTargeted = true
+        dropPreview.fileCount = 3
+        views.append(("drop-box", AnyView(MenuBarDropView(state: dropPreview))))
         if ProcessInfo.processInfo.environment["LANBOX_SNAPSHOT_BURST"] != nil {
             views = [("devices", views[1].1)]
         }
@@ -327,6 +342,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
     }
 
     // MARK: 退出
+
+    func applicationWillTerminate(_ notification: Notification) {
+        menuBarDrop?.stop()
+    }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         let received = model.receivedItemsInTemporaryFolder
