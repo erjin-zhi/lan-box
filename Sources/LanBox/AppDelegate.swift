@@ -14,10 +14,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
     private var menuBarDrop: MenuBarDropController?
     private var dropBoxIsVisible = false
     private var pinned = false
+    private var preparingToTerminate = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         model = AppModel()
         AppModel.applyDockPolicy(model.showInDock)
+        AppUpdater.shared.start()
         NSApp.mainMenu = makeMainMenu()
         NotificationCenter.default.addObserver(forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.model.appDidBecomeActive() }
@@ -154,6 +156,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
 
         submenu("LanBox", [
             item("关于 LanBox", #selector(NSApplication.orderFrontStandardAboutPanel(_:))),
+            item("检查更新…", #selector(AppUpdater.checkForUpdates(_:)), target: AppUpdater.shared),
             .separator(),
             item("隐藏 LanBox", #selector(NSApplication.hide(_:)), "h"),
             item("隐藏其他", #selector(NSApplication.hideOtherApplications(_:)), "h", [.command, .option]),
@@ -348,6 +351,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        // Sparkle sends the regular quit Apple event before replacing the app.
+        // Keep these safeguards here so they also cover resumed/pending updates.
+        guard !preparingToTerminate else { return .terminateCancel }
+        guard model.hub.pauseTransfersIfIdle() else {
+            let activeCount = model.hub.allTransfers.filter { $0.state == .active }.count
+            let alert = NSAlert()
+            alert.messageText = activeCount > 0 ? "还有 \(activeCount) 个文件正在传输" : "文件传输刚刚结束"
+            alert.informativeText = "请等待传输完成，或在“传输”中停止任务后，再退出或安装更新。"
+            alert.addButton(withTitle: "继续传输")
+            NSApp.activate()
+            alert.runModal()
+            return .terminateCancel
+        }
+
+        preparingToTerminate = true
+        var willTerminate = false
+        defer {
+            preparingToTerminate = false
+            if !willTerminate { model.hub.resumeTransfers() }
+        }
+
+        // Read the directory again: an upload may have completed since the last UI refresh.
+        model.reloadItems()
         let received = model.receivedItemsInTemporaryFolder
         if !received.isEmpty {
             let alert = NSAlert()
@@ -358,11 +384,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSPo
             alert.addButton(withTitle: "取消")
             NSApp.activate()
             switch alert.runModal() {
-            case .alertFirstButtonReturn: model.moveReceivedToDownloads()
+            case .alertFirstButtonReturn:
+                guard model.moveReceivedToDownloads() else {
+                    let failure = NSAlert()
+                    failure.messageText = "未能保存全部收到的文件"
+                    failure.informativeText = model.lastError ?? "文件仍保留在共享文件夹中，请先保存，再退出或安装更新。"
+                    failure.addButton(withTitle: "返回 LanBox")
+                    failure.runModal()
+                    return .terminateCancel
+                }
             case .alertSecondButtonReturn: break
             default: return .terminateCancel
             }
         }
+        willTerminate = true
         model.stopSharing()
         return .terminateNow
     }

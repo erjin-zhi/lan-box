@@ -236,6 +236,11 @@ final class APIHandler: @unchecked Sendable {
         let transfer: Transfer? = inline
             ? nil
             : hub.startTransfer(.download, clientID: clientID, name: displayName, path: relPath, total: length, connection: c)
+        if !inline, transfer == nil {
+            try? handle.close()
+            c.respondError(503, "Mac 正在准备退出，请稍后重试")
+            return
+        }
         if inline { hub.update(clientID) { $0.activity = "正在预览 \(displayName)" } }
 
         var remaining = length
@@ -281,6 +286,10 @@ final class APIHandler: @unchecked Sendable {
         }
 
         let estimate = ShareStore.totalSize(of: target)
+        guard let transfer = hub.startTransfer(.download, clientID: clientID, name: zipName, path: path, total: estimate > 0 ? estimate : nil, connection: c) else {
+            c.respondError(503, "Mac 正在准备退出，请稍后重试")
+            return
+        }
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
         process.arguments = ["-c", "-k", "--keepParent", "--norsrc", "--noextattr", "--noqtn", "--noacl", "--zlibCompressionLevel", "0", target.path, "-"]
@@ -288,11 +297,11 @@ final class APIHandler: @unchecked Sendable {
         process.standardOutput = pipe
         process.standardError = FileHandle.nullDevice
         do { try process.run() } catch {
+            hub.endTransfer(transfer, .failed)
             c.respondError(500, "无法打包该文件夹")
             return
         }
 
-        let transfer = hub.startTransfer(.download, clientID: clientID, name: zipName, path: path, total: estimate > 0 ? estimate : nil, connection: c)
         let reader = pipe.fileHandleForReading
         c.onClosed { if process.isRunning { process.terminate() } }
 
@@ -389,6 +398,19 @@ final class APIHandler: @unchecked Sendable {
             return
         }
 
+        // Register before creating folders or temporary files. Quit preparation and
+        // transfer admission share one lock, so neither can slip past the other.
+        let relPath = ((ShareStore.components(of: req.query["dir"] ?? "") ?? []) + comps).joined(separator: "/")
+        let fileName = comps.last!
+        guard let transfer = hub.startTransfer(.upload, clientID: clientID, name: fileName, path: relPath, total: length, connection: c) else {
+            c.respondError(503, "Mac 正在准备退出，请稍后重试")
+            return
+        }
+        var readingBody = false
+        defer {
+            if !readingBody { hub.endTransfer(transfer, .failed) }
+        }
+
         // 带目录的上传（拖入文件夹）：逐级创建真实子文件夹
         var dir = baseDir
         for folder in comps.dropLast() {
@@ -409,21 +431,18 @@ final class APIHandler: @unchecked Sendable {
                 }
             }
         }
-        let fileName = comps.last!
         let part = dir.appendingPathComponent("\(ShareStore.partPrefix)\(UUID().uuidString).part")
         guard FileManager.default.createFile(atPath: part.path, contents: nil), let handle = try? FileHandle(forWritingTo: part) else {
             c.respondError(500, "无法写入文件")
             return
         }
 
-        let relPath = ((ShareStore.components(of: req.query["dir"] ?? "") ?? []) + comps).joined(separator: "/")
-        let transfer = hub.startTransfer(.upload, clientID: clientID, name: fileName, path: relPath, total: length, connection: c)
-
         if req.headers["expect"]?.lowercased() == "100-continue" {
             c.send(Data("HTTP/1.1 100 Continue\r\n\r\n".utf8))
         }
 
         var writeFailed = false
+        readingBody = true
         c.readBody(length: length, onChunk: { chunk in
             do { try handle.write(contentsOf: chunk) } catch { writeFailed = true; return false }
             transfer.add(chunk.count)

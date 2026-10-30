@@ -167,6 +167,7 @@ struct PopoverView: View {
 
 struct SettingsMenu: View {
     @ObservedObject var model: AppModel
+    @ObservedObject private var updater = AppUpdater.shared
     let quit: () -> Void
 
     var body: some View {
@@ -191,6 +192,19 @@ struct SettingsMenu: View {
             Divider()
             Toggle("在 Dock 中显示", isOn: $model.showInDock)
             Toggle("登录时启动", isOn: $model.launchAtLogin)
+            Divider()
+            Section("更新") {
+                Button("检查更新…") { updater.checkForUpdates() }
+                    .disabled(!updater.isAvailable || !updater.canCheckForUpdates)
+                Toggle("自动检查更新", isOn: Binding(
+                    get: { updater.automaticallyChecksForUpdates },
+                    set: { updater.setAutomaticallyChecksForUpdates($0) }
+                ))
+                .disabled(!updater.isAvailable)
+                if let reason = updater.unavailableReason {
+                    Text(reason).font(.caption)
+                }
+            }
             Divider()
             Button("退出 LanBox", action: quit).keyboardShortcut("q")
         } label: {

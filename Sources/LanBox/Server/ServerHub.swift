@@ -142,6 +142,7 @@ final class ServerHub: @unchecked Sendable {
     private var streams: [UUID: (clientID: String, conn: HTTPConnection)] = [:]
     private var failedPINAttempts: [String: (count: Int, until: Date?)] = [:]
     private var _config = ServerConfig()
+    private var acceptingTransfers = true
     private var timer: DispatchSourceTimer?
     private let queue = DispatchQueue(label: "lanbox.hub")
     private var tickCount = 0
@@ -330,18 +331,35 @@ final class ServerHub: @unchecked Sendable {
 
     // MARK: 传输
 
-    func startTransfer(_ direction: Transfer.Direction, clientID: String, name: String, path: String, total: Int64?, connection: HTTPConnection) -> Transfer {
+    /// Atomically stop admitting transfers only when every current transfer has finished.
+    /// The app keeps this gate closed while asking where to save received files.
+    func pauseTransfersIfIdle() -> Bool {
+        lock.withLock {
+            guard !transfers.contains(where: { $0.state == .active }) else { return false }
+            acceptingTransfers = false
+            return true
+        }
+    }
+
+    func resumeTransfers() {
+        lock.withLock { acceptingTransfers = true }
+    }
+
+    func startTransfer(_ direction: Transfer.Direction, clientID: String, name: String, path: String, total: Int64?, connection: HTTPConnection) -> Transfer? {
         let clientName = client(clientID)?.name ?? "未知设备"
         let t = Transfer(direction: direction, clientID: clientID, clientName: clientName, name: name, path: path, total: total)
         t.onCancel = { [weak connection] in connection?.cancel() }
-        lock.withLock {
+        let admitted = lock.withLock {
+            guard acceptingTransfers else { return false }
             transfers.append(t)
             // 只保留最近 200 条记录
             if transfers.count > 200 {
                 let removable = transfers.firstIndex { $0.state != .active }
                 if let removable { transfers.remove(at: removable) }
             }
+            return true
         }
+        guard admitted else { return nil }
         update(clientID) { c in
             c.activity = direction == .upload ? "正在上传 \(name)" : "正在下载 \(name)"
             c.activeTransfers += 1

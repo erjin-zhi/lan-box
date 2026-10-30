@@ -6,3 +6,4 @@ build/
 .claude/
 .playwright-cli/
 output/
+__pycache__/

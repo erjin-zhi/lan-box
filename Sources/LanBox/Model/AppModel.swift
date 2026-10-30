@@ -444,13 +444,25 @@ final class AppModel: ObservableObject {
     }
 
     /// 退出前把临时文件夹里收到的文件移到“下载”。
-    func moveReceivedToDownloads() {
-        guard let downloads = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first else { return }
+    @discardableResult
+    func moveReceivedToDownloads() -> Bool {
+        guard let downloads = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first else {
+            lastError = "找不到“下载”文件夹。收到的文件仍保留在共享文件夹中。"
+            return false
+        }
         let store = ShareStore(root: downloads)
         for item in receivedItemsInTemporaryFolder {
             let dest = store.uniqueURL(in: downloads, name: item.name)
-            try? FileManager.default.moveItem(at: item.url, to: dest)
+            do {
+                try FileManager.default.moveItem(at: item.url, to: dest)
+            } catch {
+                reloadItems()
+                lastError = "无法保存“\(item.name)”：\(error.localizedDescription)。尚未保存的文件仍在共享文件夹中。"
+                return false
+            }
         }
+        reloadItems()
+        return true
     }
 
     // MARK: 设备与传输

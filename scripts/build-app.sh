@@ -1,76 +1,61 @@
 #!/bin/zsh
-# 构建 LanBox.app，输出到 build/LanBox.app
 # 用法：./scripts/build-app.sh [release|debug] [native|universal|arm64|x86_64]
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 CONFIG="${1:-release}"
 TARGET_ARCH="${2:-native}"
-BUILD_ARGS=(-c "$CONFIG")
+SWIFT_BUILD_DIR="$(python3 scripts/release-config.py build-path)"
+BUILD_ARGS=(--disable-keychain --scratch-path "$SWIFT_BUILD_DIR" -c "$CONFIG")
 case "$TARGET_ARCH" in
   native) ;;
   universal) BUILD_ARGS+=(--arch arm64 --arch x86_64) ;;
   arm64|x86_64) BUILD_ARGS+=(--arch "$TARGET_ARCH") ;;
   *) echo "不支持的架构：$TARGET_ARCH" >&2; exit 1 ;;
 esac
-APP="build/LanBox.app"
-VERSION="1.0.0"
-# 每次构建递增，系统据此刷新缓存的 App 图标（Dock、通知、Finder）
-BUILD="$(date +%Y%m%d%H%M)"
-
+# 14 位 UTC 构建号可跨时区比较，并大于 1.0.0 使用的 12 位构建号。
+BUILD="$(date -u +%Y%m%d%H%M%S)"
+python3 scripts/release-config.py get version >/dev/null
 swift build "${BUILD_ARGS[@]}"
 BIN="$(swift build "${BUILD_ARGS[@]}" --show-bin-path)/LanBox"
+SPARKLE_ROOT="$SWIFT_BUILD_DIR/artifacts/sparkle/Sparkle"
+SPARKLE_SOURCE="$SPARKLE_ROOT/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework"
+[[ -d "$SPARKLE_SOURCE" ]] || { echo "构建目录中缺少 Sparkle.framework：$SPARKLE_SOURCE" >&2; exit 1; }
 
-rm -rf "$APP"
-mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources/web"
+# Documents/iCloud 的 File Provider 会异步给 .app/.xpc 附加 FinderInfo。
+# 在系统本地缓存中完成组装和签名；项目内仅保留同名入口，避免清理 xattr 的竞态。
+BUILD_WORK="$(mktemp -d "$(getconf DARWIN_USER_CACHE_DIR)/LanBox-build.XXXXXXXX")"
+APP="$BUILD_WORK/LanBox.app"
+BUILD_SUCCEEDED=false
+trap 'if [[ "$BUILD_SUCCEEDED" != true ]]; then rm -rf "$BUILD_WORK"; fi' EXIT
+mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources/web" "$APP/Contents/Frameworks"
 cp "$BIN" "$APP/Contents/MacOS/LanBox"
 cp Resources/web/index.html Resources/web/logo.svg "$APP/Contents/Resources/web/"
+ditto --norsrc --noextattr --noqtn --noacl "$SPARKLE_SOURCE" "$APP/Contents/Frameworks/Sparkle.framework"
+cp "$SPARKLE_ROOT/LICENSE" "$APP/Contents/Resources/Sparkle-LICENSE.txt"
+python3 scripts/release-config.py plist "$APP" "$BUILD"
 
-# 图标
-swift scripts/make-icon.swift build/icon >/dev/null
-iconutil -c icns build/icon/AppIcon.iconset -o "$APP/Contents/Resources/AppIcon.icns"
-cp build/icon/touch-icon.png "$APP/Contents/Resources/web/touch-icon.png"
+swift scripts/make-icon.swift "$BUILD_WORK/icon" >/dev/null
+iconutil -c icns "$BUILD_WORK/icon/AppIcon.iconset" -o "$APP/Contents/Resources/AppIcon.icns"
+cp "$BUILD_WORK/icon/touch-icon.png" "$APP/Contents/Resources/web/touch-icon.png"
 
-cat > "$APP/Contents/Info.plist" <<PLIST
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>CFBundleIdentifier</key><string>app.lanbox.mac</string>
-  <key>CFBundleName</key><string>LanBox</string>
-  <key>CFBundleDisplayName</key><string>LanBox</string>
-  <key>CFBundleExecutable</key><string>LanBox</string>
-  <key>CFBundlePackageType</key><string>APPL</string>
-  <key>CFBundleShortVersionString</key><string>${VERSION}</string>
-  <key>CFBundleVersion</key><string>${BUILD}</string>
-  <key>CFBundleIconFile</key><string>AppIcon</string>
-  <key>CFBundleDevelopmentRegion</key><string>zh_CN</string>
-  <key>LSMinimumSystemVersion</key><string>26.0</string>
-  <key>LSUIElement</key><true/>
-  <key>LSApplicationCategoryType</key><string>public.app-category.utilities</string>
-  <key>NSLocalNetworkUsageDescription</key><string>LanBox 需要使用局域网，让同一网络中的手机和电脑访问你共享的文件。</string>
-  <key>NSSupportsAutomaticTermination</key><false/>
-  <!-- 允许把任意文件 / 文件夹拖到 Dock 图标上加入共享；Rank None 表示不抢默认打开方式 -->
-  <key>CFBundleDocumentTypes</key>
-  <array>
-    <dict>
-      <key>CFBundleTypeName</key><string>共享的项目</string>
-      <key>CFBundleTypeRole</key><string>Viewer</string>
-      <key>LSHandlerRank</key><string>None</string>
-      <key>LSItemContentTypes</key><array><string>public.item</string><string>public.folder</string></array>
-    </dict>
-  </array>
-</dict>
-</plist>
-PLIST
-
+# 从内向外签名；不使用 --deep 重签，避免覆盖 Sparkle helper 的独立 entitlement。
 xattr -cr "$APP"
-codesign --force --deep --sign - "$APP" >/dev/null
+SPARKLE="$APP/Contents/Frameworks/Sparkle.framework/Versions/B"
+codesign --force --sign - "$SPARKLE/XPCServices/Installer.xpc"
+codesign --force --sign - --preserve-metadata=entitlements "$SPARKLE/XPCServices/Downloader.xpc"
+codesign --force --sign - "$SPARKLE/Autoupdate"
+codesign --force --sign - "$SPARKLE/Updater.app"
+codesign --force --sign - "$APP/Contents/Frameworks/Sparkle.framework"
+codesign --force --sign - "$APP"
 
-# 重新登记到 LaunchServices，通知中心和 Dock 才会换成新图标
+# 重新登记到 LaunchServices，刷新 Dock/通知图标；清理系统重新附加的 FinderInfo。
 touch "$APP"
 /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$APP" >/dev/null 2>&1 || true
-# LaunchServices 可能重新附加 FinderInfo；分发前清理，确保严格签名验证通过。
 xattr -cr "$APP"
 codesign --verify --deep --strict "$APP"
-echo "已生成 $APP"
+mkdir -p build
+rm -rf build/LanBox.app
+ln -s "$APP" build/LanBox.app
+BUILD_SUCCEEDED=true
+echo "已生成 build/LanBox.app（构建 $BUILD，签名产物：$APP）"
