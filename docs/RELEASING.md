@@ -34,7 +34,7 @@ Sparkle 工具位于该目录下的 `artifacts/sparkle/Sparkle/bin/`。`build-ap
    ./scripts/publish-release.sh
    ```
 
-发布脚本先校验源码提交、远程标签、版本递增、签名与校验文件，再创建 draft Release。安装包、`appcast.xml` 和 `SHA256SUMS.txt` 全部上传且 SHA-256 回读一致后，才转为最新正式 Release，避免客户端先发现尚不存在的安装包。脚本不会覆盖已存在的 Release；如果上传中断，检查并处理遗留 draft 后重试。
+发布脚本先校验源码提交、远程标签、版本递增、签名与校验文件，再创建 draft Release。安装包、`appcast.xml` 和 `SHA256SUMS.txt` 全部上传且 SHA-256 回读一致后，才转为最新正式 Release，避免客户端先发现尚不存在的安装包。上传中断后可重新运行脚本，继续同一标签的草稿；脚本不会覆盖已经公开的 Release。
 
 `prepare-release.sh` 可以在开发期间运行以检查打包，但发布脚本会拒绝来自未提交工作区的包。源代码提交后需重新准备正式包。`release.json` 记录源码提交与构建号，仅作为本地发布校验材料。
 
