@@ -51,6 +51,9 @@ final class APIHandler: @unchecked Sendable {
         case ("GET", "/"), ("GET", "/index.html"):
             servePage(c, headers: extraHeaders)
             return
+        case ("GET", "/logo.svg"):
+            c.respond(HTTPHead(200, [("Content-Type", "image/svg+xml"), ("Cache-Control", "max-age=3600")]), body: Data(WebAssets.logoMaster.utf8))
+            return
         case ("GET", "/favicon.svg"), ("GET", "/favicon.ico"):
             var head = HTTPHead(200, [("Content-Type", "image/svg+xml"), ("Cache-Control", "max-age=86400")])
             head.headers += extraHeaders

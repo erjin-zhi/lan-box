@@ -1,7 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 22 22" fill="none">
-  <g stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M5 9L11 6L17 9V16L11 19L5 16Z"/>
-    <path d="M5 9L11 12L17 9M11 12V19"/>
-    <path d="M8 7.5L14 10.5V13"/>
+  <!-- logo.svg 的 64 单位网格 × 0.43，与 BoxStatusIcon.swift 坐标一致 -->
+  <g transform="translate(11 11.4) scale(0.43) translate(-32 -31.3)" stroke="currentColor" stroke-width="3.14" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M14 25.5L32 16.5L50 25.5L32 34.5Z"/>
+    <path d="M14 25.5V41.5L32 50.5L50 41.5V25.5M32 34.5V50.5"/>
+    <circle cx="32" cy="27" r="2.67" fill="currentColor" stroke="none"/>
   </g>
 </svg>

@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- LanBox 标志：线条开口盒 + 局域网信号。所有尺寸（App 图标、App 内标志、网页、favicon）都由这一个文件生成。 -->
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3C3F45"/>
+      <stop offset="1" stop-color="#1D1E22"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14.4" fill="url(#tile)"/>
+  <rect id="rim" x="0.6" y="0.6" width="62.8" height="62.8" rx="13.8" fill="none" stroke="#FFFFFF" stroke-opacity="0.10" stroke-width="1.2"/>
+
+  <g transform="translate(32 32) scale(0.9) translate(-32 -31.3)">
+  <!-- 盒身侧面的微弱明暗 -->
+  <g id="faces">
+    <path d="M14 25.5L32 34.5V50.5L14 41.5Z" fill="#FFFFFF" fill-opacity="0.05"/>
+    <path d="M32 34.5L50 25.5V41.5L32 50.5Z" fill="#FFFFFF" fill-opacity="0.11"/>
+    <path d="M14 25.5L32 16.5L50 25.5L32 34.5Z" fill="#64D2FF" fill-opacity="0.10"/>
+  </g>
+
+  <g fill="none" stroke="#F5F5F7" stroke-width="2.9" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M14 25.5L32 16.5L50 25.5L32 34.5Z"/>
+    <path d="M14 25.5V41.5L32 50.5L50 41.5V25.5"/>
+    <path d="M32 34.5V50.5"/>
+  </g>
+
+  <g fill="none" stroke="#64D2FF" stroke-width="2.9" stroke-linecap="round">
+    <path d="M27.02 22.82A6.5 6.5 0 0 1 36.98 22.82"/>
+    <path id="arc-outer" d="M21.39 16.39A15 15 0 0 1 42.61 16.39"/>
+  </g>
+  <circle cx="32" cy="27" r="2.3" fill="#64D2FF"/>
+  </g>
+</svg>

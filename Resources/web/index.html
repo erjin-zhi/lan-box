@@ -85,7 +85,7 @@ svg { display: block; }
   max-width: 760px; margin: 0 auto; height: 52px;
   display: flex; align-items: center; gap: 10px; padding: 0 20px;
 }
-.mark { width: 26px; height: 26px; border-radius: 7px; background: var(--ink); color: var(--bg); display: grid; place-items: center; flex: none; }
+.mark { width: 28px; height: 28px; flex: none; display: block; }
 .brand { font-weight: 600; font-size: 16px; letter-spacing: -.01em; }
 .spacer { flex: 1; }
 .pill {
@@ -356,9 +356,7 @@ button.onode { cursor: pointer; }
 <body>
 <header class="topbar">
   <div class="topbar-inner">
-    <div class="mark" aria-hidden="true">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M4 8l8-4 8 4v8l-8 4-8-4z"/><path d="M4 8l8 4 8-4M12 12v8"/></svg>
-    </div>
+    <img class="mark" src="/logo.svg" alt="" width="28" height="28">
     <div class="brand">LanBox</div>
     <div class="spacer"></div>
     <button class="pill hidden" id="devicesBtn" type="button" aria-haspopup="dialog">
@@ -761,7 +759,8 @@ button.onode { cursor: pointer; }
         }
       });
       firstSync = false;
-      // 先同步画一帧，避免节点在第一帧之前堆在左上角
+      // 先同步画一帧，避免节点在第一帧之前堆在左上角；页面刚从隐藏切到显示时尺寸还没量过
+      if (!W) resize();
       draw();
       if (!started) { started = true; requestAnimationFrame(frame); }
     }

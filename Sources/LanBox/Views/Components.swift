@@ -4,14 +4,12 @@ struct AppMark: View {
     var size: CGFloat
 
     var body: some View {
-        RoundedRectangle(cornerRadius: size * 0.27, style: .continuous)
-            .fill(Color(nsColor: .labelColor))
+        Image(nsImage: WebAssets.logoImage(points: size))
+            .resizable()
+            .interpolation(.high)
             .frame(width: size, height: size)
-            .overlay {
-                Image(systemName: "shippingbox")
-                    .font(.system(size: size * 0.5, weight: .semibold))
-                    .foregroundStyle(Color(nsColor: .windowBackgroundColor))
-            }
+            .shadow(color: .black.opacity(0.16), radius: size * 0.06, y: size * 0.03)
+            .accessibilityHidden(true)
     }
 }
 

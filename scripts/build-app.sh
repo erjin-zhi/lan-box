@@ -14,7 +14,7 @@ BIN="$(swift build -c "$CONFIG" --show-bin-path)/LanBox"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources/web"
 cp "$BIN" "$APP/Contents/MacOS/LanBox"
-cp Resources/web/index.html "$APP/Contents/Resources/web/"
+cp Resources/web/index.html Resources/web/logo.svg "$APP/Contents/Resources/web/"
 
 # 图标
 swift scripts/make-icon.swift build/icon >/dev/null
