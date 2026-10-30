@@ -40,6 +40,16 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>LSApplicationCategoryType</key><string>public.app-category.utilities</string>
   <key>NSLocalNetworkUsageDescription</key><string>LanBox 需要使用局域网，让同一网络中的手机和电脑访问你共享的文件。</string>
   <key>NSSupportsAutomaticTermination</key><false/>
+  <!-- 允许把任意文件 / 文件夹拖到 Dock 图标上加入共享；Rank None 表示不抢默认打开方式 -->
+  <key>CFBundleDocumentTypes</key>
+  <array>
+    <dict>
+      <key>CFBundleTypeName</key><string>共享的项目</string>
+      <key>CFBundleTypeRole</key><string>Viewer</string>
+      <key>LSHandlerRank</key><string>None</string>
+      <key>LSItemContentTypes</key><array><string>public.item</string><string>public.folder</string></array>
+    </dict>
+  </array>
 </dict>
 </plist>
 PLIST

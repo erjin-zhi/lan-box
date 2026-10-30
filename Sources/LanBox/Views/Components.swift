@@ -104,3 +104,24 @@ struct EmptyState: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
+
+/// 底部浮出的简短提示（拷贝、粘贴之后的反馈）。
+struct NoticeBanner: View {
+    let text: String?
+
+    var body: some View {
+        ZStack {
+            if let text {
+                Text(text)
+                    .font(.callout.weight(.medium))
+                    .lineLimit(1)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .glassEffect(.regular, in: .capsule)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .animation(.spring(duration: 0.3), value: text)
+        .allowsHitTesting(false)
+    }
+}

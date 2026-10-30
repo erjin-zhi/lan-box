@@ -17,6 +17,7 @@ struct SharedItem: Identifiable, Equatable {
     let size: Int64?
     let from: String?
     let modified: Date?
+    let added: Date?
 }
 
 /// 星图动效里的一次“文件气泡”：设备上传完成或下载完成。
@@ -53,6 +54,16 @@ final class AppModel: ObservableObject {
     @Published var addMode: ShareStore.AddMode { didSet { defaults.set(addMode.rawValue, forKey: "addMode") } }
     @Published var notifyNewDevices: Bool { didSet { defaults.set(notifyNewDevices, forKey: "notifyNewDevices") } }
     @Published var notifyUploads: Bool { didSet { defaults.set(notifyUploads, forKey: "notifyUploads") } }
+    /// 在 Dock 中显示图标：菜单栏图标被挤掉时，仍可从 Dock 打开主窗口。
+    @Published var showInDock: Bool {
+        didSet {
+            defaults.set(showInDock, forKey: "showInDock")
+            AppModel.applyDockPolicy(showInDock)
+        }
+    }
+    /// 短暂的操作提示，例如“已加入 3 个项目”。
+    @Published private(set) var notice: String?
+    private var noticeTask: Task<Void, Never>?
     @Published var launchAtLogin: Bool = SMAppService.mainApp.status == .enabled {
         didSet {
             guard launchAtLogin != (SMAppService.mainApp.status == .enabled) else { return }
@@ -88,7 +99,7 @@ final class AppModel: ObservableObject {
     init() {
         defaults.register(defaults: [
             "allowUpload": true, "requirePIN": true, "addMode": "link",
-            "notifyNewDevices": true, "notifyUploads": true, "port": 8765,
+            "notifyNewDevices": true, "notifyUploads": true, "port": 8765, "showInDock": true,
         ])
         allowUpload = defaults.bool(forKey: "allowUpload")
         requirePIN = defaults.bool(forKey: "requirePIN")
@@ -96,6 +107,7 @@ final class AppModel: ObservableObject {
         addMode = ShareStore.AddMode(rawValue: defaults.string(forKey: "addMode") ?? "") ?? .link
         notifyNewDevices = defaults.bool(forKey: "notifyNewDevices")
         notifyUploads = defaults.bool(forKey: "notifyUploads")
+        showInDock = defaults.bool(forKey: "showInDock")
         selectedInterfaceID = defaults.string(forKey: "interface")
 
         AppModel.cleanUpOldTemporaryFolders()
@@ -324,10 +336,16 @@ final class AppModel: ObservableObject {
                 isBroken: broken || values == nil,
                 size: kind == .file ? values?.fileSize.map(Int64.init) : nil,
                 from: ShareStore.origin(of: url),
-                modified: values?.contentModificationDate
+                modified: values?.contentModificationDate,
+                added: ShareStore.addedDate(of: url)
             ))
         }
-        result.sort { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        // 最新加入的在最上面
+        result.sort {
+            let a = $0.added ?? .distantPast, b = $1.added ?? .distantPast
+            if a != b { return a > b }
+            return $0.name.localizedStandardCompare($1.name) == .orderedAscending
+        }
         if result != items { items = result }
     }
 
@@ -341,6 +359,56 @@ final class AppModel: ObservableObject {
             store.add(urls, mode: .link)
             reloadItems()
         }
+    }
+
+    static func applyDockPolicy(_ show: Bool) {
+        NSApp.setActivationPolicy(show ? .regular : .accessory)
+        if show { NSApp.activate() }
+    }
+
+    func flash(_ text: String) {
+        notice = text
+        noticeTask?.cancel()
+        noticeTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(2.4))
+            if !Task.isCancelled { self?.notice = nil }
+        }
+    }
+
+    /// ⌘V：剪贴板里的文件按拖入方式加入；截图等图片存为 PNG；纯文本存为 .txt。
+    func pasteFromClipboard(_ pb: NSPasteboard = .general) {
+        let urls = (pb.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL]) ?? []
+        if !urls.isEmpty {
+            add(urls)
+            flash(urls.count == 1 ? "已加入“\(urls[0].lastPathComponent)”" : "已加入 \(urls.count) 个项目")
+            return
+        }
+        let stamp: String = {
+            let f = DateFormatter()
+            f.dateFormat = "yyyy-MM-dd HH.mm.ss"
+            return f.string(from: Date())
+        }()
+        let store = handler.store
+        if let image = NSImage(pasteboard: pb), let tiff = image.tiffRepresentation,
+           let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) {
+            let dest = store.uniqueURL(in: rootURL, name: "粘贴的图片 \(stamp).png")
+            if (try? png.write(to: dest)) != nil { reloadItems(); flash("已保存为“\(dest.lastPathComponent)”") }
+            return
+        }
+        if let text = pb.string(forType: .string), !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            let dest = store.uniqueURL(in: rootURL, name: "粘贴的文本 \(stamp).txt")
+            if (try? text.write(to: dest, atomically: true, encoding: .utf8)) != nil { reloadItems(); flash("已保存为“\(dest.lastPathComponent)”") }
+            return
+        }
+        flash("剪贴板里没有可共享的内容")
+    }
+
+    /// 右键“拷贝”：把原文件放到剪贴板，可以在 Finder 或其他 App 里粘贴。
+    func copyToClipboard(_ item: SharedItem) {
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        pb.writeObjects([(item.target ?? item.url) as NSURL])
+        flash("已拷贝“\(item.name)”")
     }
 
     func pickFilesToAdd() {
@@ -435,6 +503,7 @@ final class AppModel: ObservableObject {
         guard let link = shareLink else { return }
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(link, forType: .string)
+        flash("已拷贝访问链接")
     }
 
     func openInBrowser() {

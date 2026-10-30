@@ -406,8 +406,9 @@ button.onode { cursor: pointer; }
       <input id="search" type="search" placeholder="搜索文件名" aria-label="搜索文件名">
     </label>
     <select id="sort" class="select" aria-label="排序方式">
+      <option value="added">最新加入</option>
       <option value="name">按名称</option>
-      <option value="time">按时间</option>
+      <option value="time">按修改时间</option>
       <option value="size">按大小</option>
     </select>
   </div>
@@ -486,6 +487,10 @@ button.onode { cursor: pointer; }
   var PREVIEW_IMAGE = 'jpg jpeg png gif webp bmp avif'.split(' ');
   var PREVIEW_TAB = 'mp4 mov m4v webm mp3 m4a aac wav flac ogg pdf txt'.split(' ');
 
+  // 有鼠标的设备才提示拖放和快捷键
+  var DESKTOP = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+  var PASTE_KEY = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent) ? '⌘V' : 'Ctrl+V';
+
   function extOf(name) { var i = name.lastIndexOf('.'); return i > 0 ? name.slice(i + 1).toLowerCase() : ''; }
   function typeOf(entry) {
     if (entry.kind === 'folder') return 'folder';
@@ -527,7 +532,7 @@ button.onode { cursor: pointer; }
   // ---------- 状态 ----------
   var S = {
     info: null, path: '', listing: null, devices: [], connected: false, stopped: false,
-    query: '', sort: localStorage.getItem('lb_sort') || 'name',
+    query: '', sort: localStorage.getItem('lb_sort') || 'added',
     transfers: [], trayCollapsed: false
   };
 
@@ -1017,6 +1022,8 @@ button.onode { cursor: pointer; }
     var query = S.query.trim().toLowerCase();
     if (query) list = list.filter(function (e) { return e.name.toLowerCase().indexOf(query) >= 0; });
     list.sort(function (a, b) {
+      // “最新加入”不区分文件和文件夹，刚共享的东西总在最上面
+      if (key === 'added') return (b.added || 0) - (a.added || 0) || a.name.localeCompare(b.name, 'zh-CN', { numeric: true });
       var fa = a.kind === 'folder', fb = b.kind === 'folder';
       if (fa !== fb) return fa ? -1 : 1;
       if (key === 'time') return (b.modified || 0) - (a.modified || 0);
@@ -1039,6 +1046,7 @@ button.onode { cursor: pointer; }
     box.className = 'list';
     var canUpload = S.info.allowUpload && l.writable;
     $('uploadBtn').disabled = !canUpload;
+    $('uploadBtn').title = DESKTOP ? '也可以把文件拖进页面，或按 ' + PASTE_KEY + ' 粘贴' : '';
     note.classList.toggle('hidden', !(S.info.allowUpload && !l.writable));
     note.textContent = '这是 Mac 上的原始文件夹，只能下载。要上传，请回到“共享文件”。';
     $('filters').classList.toggle('hidden', l.entries.length < 6);
@@ -1048,7 +1056,7 @@ button.onode { cursor: pointer; }
       var empty = el('div', 'empty');
       empty.innerHTML = '<div class="empty-icon">' + ICONS.inbox + '</div>' +
         (S.path ? '<h2>这个文件夹是空的</h2><p>' + (canUpload ? '上传的文件会保存到 Mac 的这个文件夹中。' : '没有可以下载的内容。') + '</p>'
-          : '<h2>Mac 还没有共享文件</h2><p>在 Mac 上把文件拖进 LanBox，它们会立即出现在这里。' + (canUpload ? '你也可以把文件上传给 Mac。' : '') + '</p>');
+          : '<h2>Mac 还没有共享文件</h2><p>在 Mac 上把文件拖进 LanBox，它们会立即出现在这里。' + (canUpload ? '你也可以把文件上传给 Mac' + (DESKTOP ? '，拖进这个页面或按 ' + PASTE_KEY + ' 粘贴都可以。' : '。') : '') + '</p>');
       if (canUpload) {
         var b = el('button', 'btn secondary', '选择要上传的文件');
         b.addEventListener('click', function () { $('fileInput').click(); });
@@ -1250,6 +1258,29 @@ button.onode { cursor: pointer; }
     if (wasActive !== (t.state === 'active')) renderLink();
     scheduleTray();
   }
+
+  // 粘贴上传：Ctrl+V / ⌘V。文件、截图直接上传；纯文本存成 .txt（在输入框里粘贴不受影响）
+  document.addEventListener('paste', function (e) {
+    var t = e.target;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+    if (!S.info || !S.info.allowUpload || (S.listing && !S.listing.writable) || !$('gate').classList.contains('hidden')) return;
+    var cd = e.clipboardData; if (!cd) return;
+    var stamp = (function () { var d = new Date(), p = function (n) { return String(n).padStart(2, '0'); };
+      return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + p(d.getHours()) + '.' + p(d.getMinutes()) + '.' + p(d.getSeconds()); })();
+    var files = Array.prototype.slice.call(cd.files || []);
+    var items = files.map(function (f, i) {
+      // 截图在剪贴板里通常叫 image.png，换成带时间的名字
+      var name = /^image\.(png|jpe?g|gif|webp)$/i.test(f.name) ? '粘贴的图片 ' + stamp + (files.length > 1 ? '-' + (i + 1) : '') + '.' + f.name.split('.').pop() : f.name;
+      return { file: f, rel: name };
+    });
+    if (!items.length) {
+      var text = cd.getData('text/plain');
+      if (!text || !text.trim()) return;
+      items = [{ file: new File([text], '粘贴的文本 ' + stamp + '.txt', { type: 'text/plain' }), rel: '粘贴的文本 ' + stamp + '.txt' }];
+    }
+    e.preventDefault();
+    enqueue(items);
+  });
 
   // 拖放上传（桌面浏览器，支持文件夹）
   var dragDepth = 0;

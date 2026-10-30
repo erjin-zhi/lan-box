@@ -5,20 +5,45 @@ enum PopoverTab: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
+extension AppModel {
+    var statusColor: Color {
+        switch serverState {
+        case .running: return .green
+        case .starting: return .orange
+        case .failed: return .red
+        case .stopped: return .secondary
+        }
+    }
+
+    var statusText: String {
+        switch serverState {
+        case .running:
+            let n = onlineClients.count
+            return n == 0 ? "正在共享，等待设备连接" : "正在共享，\(n) 台设备在线"
+        case .starting: return "正在启动…"
+        case .failed: return "启动失败"
+        case .stopped: return "已停止共享"
+        }
+    }
+}
+
 struct PopoverView: View {
     @ObservedObject var model: AppModel
     let showQR: () -> Void
     let togglePin: () -> Bool
+    let openWindow: () -> Void
     let quit: () -> Void
 
     @State private var tab: PopoverTab
     @State private var pinned = false
     @State private var dropTargeted = false
 
-    init(model: AppModel, initialTab: PopoverTab = .files, showQR: @escaping () -> Void, togglePin: @escaping () -> Bool, quit: @escaping () -> Void) {
+    init(model: AppModel, initialTab: PopoverTab = .files, showQR: @escaping () -> Void, togglePin: @escaping () -> Bool,
+         openWindow: @escaping () -> Void = {}, quit: @escaping () -> Void) {
         self.model = model
         self.showQR = showQR
         self.togglePin = togglePin
+        self.openWindow = openWindow
         self.quit = quit
         _tab = State(initialValue: initialTab)
     }
@@ -52,8 +77,9 @@ struct PopoverView: View {
         }
         .padding(16)
         .frame(width: 404)
+        .overlay(alignment: .bottom) { NoticeBanner(text: model.notice).padding(.bottom, 64) }
         .onDrop(of: [.fileURL], isTargeted: $dropTargeted) { providers in
-            loadURLs(providers) { urls in
+            loadFileURLs(providers) { urls in
                 model.add(urls)
                 tab = .files
             }
@@ -70,11 +96,19 @@ struct PopoverView: View {
             VStack(alignment: .leading, spacing: 1) {
                 Text("LanBox").font(.headline)
                 HStack(spacing: 5) {
-                    StatusDot(color: statusColor)
-                    Text(statusText).font(.caption).foregroundStyle(.secondary)
+                    StatusDot(color: model.statusColor)
+                    Text(model.statusText).font(.caption).foregroundStyle(.secondary)
                 }
             }
             Spacer()
+            Button(action: openWindow) {
+                Image(systemName: "macwindow")
+                    .frame(width: 16, height: 16)
+            }
+            .buttonStyle(.glass)
+            .buttonBorderShape(.circle)
+            .help("打开主窗口")
+
             Button {
                 pinned = togglePin()
             } label: {
@@ -89,26 +123,6 @@ struct PopoverView: View {
                 .toggleStyle(.switch)
                 .labelsHidden()
                 .help(model.isRunning ? "停止共享" : "开始共享")
-        }
-    }
-
-    private var statusColor: Color {
-        switch model.serverState {
-        case .running: return .green
-        case .starting: return .orange
-        case .failed: return .red
-        case .stopped: return .secondary
-        }
-    }
-
-    private var statusText: String {
-        switch model.serverState {
-        case .running:
-            let n = model.onlineClients.count
-            return n == 0 ? "正在共享，等待设备连接" : "正在共享，\(n) 台设备在线"
-        case .starting: return "正在启动…"
-        case .failed: return "启动失败"
-        case .stopped: return "已停止共享"
         }
     }
 
@@ -146,20 +160,6 @@ struct PopoverView: View {
         }
         .controlSize(.regular)
     }
-
-    private func loadURLs(_ providers: [NSItemProvider], _ done: @escaping ([URL]) -> Void) {
-        let group = DispatchGroup()
-        var urls: [URL] = []
-        let lock = NSLock()
-        for p in providers where p.canLoadObject(ofClass: URL.self) {
-            group.enter()
-            _ = p.loadObject(ofClass: URL.self) { url, _ in
-                if let url, url.isFileURL { lock.withLock { urls.append(url) } }
-                group.leave()
-            }
-        }
-        group.notify(queue: .main) { if !urls.isEmpty { done(urls) } }
-    }
 }
 
 // MARK: - 设置菜单
@@ -188,6 +188,7 @@ struct SettingsMenu: View {
                 Toggle("收到文件", isOn: $model.notifyUploads)
             }
             Divider()
+            Toggle("在 Dock 中显示", isOn: $model.showInDock)
             Toggle("登录时启动", isOn: $model.launchAtLogin)
             Divider()
             Button("退出 LanBox", action: quit).keyboardShortcut("q")

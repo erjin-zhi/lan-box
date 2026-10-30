@@ -32,7 +32,7 @@ struct FilesTab: View {
                 .font(.system(size: 18))
                 .foregroundStyle(dropTargeted ? Color.accentColor : .secondary)
             VStack(alignment: .leading, spacing: 1) {
-                Text(dropTargeted ? "松开即可加入共享" : "将文件拖到这里或菜单栏图标")
+                Text(dropTargeted ? "松开即可加入共享" : "拖到这里，或拷贝后按 ⌘V")
                     .font(.callout.weight(.medium))
                 Text(model.addMode == .link ? "以替身方式加入，不会复制原文件" : "会拷贝一份到共享文件夹")
                     .font(.caption)
@@ -92,6 +92,7 @@ struct FileRow: View {
             }
         }
         .contextMenu {
+            Button("拷贝") { model.copyToClipboard(item) }.disabled(item.isBroken)
             Button("在 Finder 中显示") { model.reveal(item) }.disabled(item.isBroken)
             Divider()
             if item.isLink {
@@ -120,10 +121,12 @@ struct FileRow: View {
 
 struct DevicesTab: View {
     @ObservedObject var model: AppModel
+    /// 主窗口左栏已经常驻星图，这里不再重复。
+    var showsOrbit = true
 
     var body: some View {
         VStack(spacing: 4) {
-            OrbitView(model: model)
+            if showsOrbit { OrbitView(model: model) }
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 2) {
                     if model.clients.isEmpty {

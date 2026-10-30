@@ -49,8 +49,16 @@ struct ShareStore: Sendable {
         let kind: Kind
         let size: Int64?
         let modified: Date?
+        /// 加入共享文件夹的时间（替身按创建替身的时间，而不是原文件的时间）。
+        let added: Date?
         let isLink: Bool
         let from: String?
+    }
+
+    /// 读条目本身而不跟随替身，得到它被放进文件夹的时间。
+    static func addedDate(of url: URL) -> Date? {
+        let v = try? url.resourceValues(forKeys: [.addedToDirectoryDateKey, .creationDateKey])
+        return v?.addedToDirectoryDate ?? v?.creationDate
     }
 
     struct Listing: Codable {
@@ -80,12 +88,15 @@ struct ShareStore: Sendable {
                 kind: kind,
                 size: kind == .file ? Int64(v.fileSize ?? 0) : nil,
                 modified: v.contentModificationDate,
+                added: ShareStore.addedDate(of: url),
                 isLink: isLink,
                 from: ShareStore.origin(of: url)
             ))
         }
+        // 默认顺序：最新加入的在最前；网页端可以再切换排序方式
         entries.sort { a, b in
-            if (a.kind == .folder) != (b.kind == .folder) { return a.kind == .folder }
+            let da = a.added ?? .distantPast, db = b.added ?? .distantPast
+            if da != db { return da > db }
             return a.name.localizedStandardCompare(b.name) == .orderedAscending
         }
         let path = (ShareStore.components(of: relative) ?? []).joined(separator: "/")
